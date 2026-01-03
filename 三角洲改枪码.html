@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>改枪码工具 · 专业版</title>
+
+<style>
+:root{
+    --bg:#f0f4f8;--panel:#fff;--card:#e0f7fa;
+    --main:#26a69a;--danger:#e53935;--text:#000;
+}
+.dark{
+    --bg:#121212;--panel:#1a1a1a;--card:#1e1e1e;
+    --main:#00897b;--text:#eee;
+}
+body{margin:0;font-family:Segoe UI,Arial;background:var(--bg);color:var(--text)}
+header{
+    background:#00796b;color:#fff;padding:20px;
+    text-align:center;font-size:24px;position:relative
+}
+header button{
+    position:absolute;right:15px;top:15px;
+    border:none;border-radius:6px;padding:6px 10px;
+    background:#00000033;color:#fff;cursor:pointer
+}
+
+.weapon-group{max-width:1000px;margin:10px auto;background:var(--panel);
+    border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.weapon-header{padding:12px 16px;font-size:18px;font-weight:bold;
+    background:#b2dfdb;cursor:pointer}
+.weapon-list{display:none;padding:12px;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+
+.card{background:var(--card);border-radius:10px;padding:10px;cursor:grab}
+.card img{width:100%;border-radius:8px;margin-bottom:6px;cursor:pointer}
+.code{background:var(--panel);padding:6px;border-radius:6px;font-size:13px;word-break:break-all}
+
+.card button{width:100%;margin-top:6px;border:none;padding:6px;
+    border-radius:6px;background:var(--main);color:#fff;cursor:pointer}
+.delete{background:var(--danger)}
+
+.add-box{max-width:1000px;margin:25px auto;background:var(--panel);
+    padding:15px;border-radius:12px}
+.add-box input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc}
+
+.code-line{display:flex;gap:6px;margin-bottom:6px}
+.code-line input{flex:1}
+.code-line button{
+    width:38px;border:none;border-radius:6px;
+    font-size:20px;color:#fff;cursor:pointer
+}
+.plus{background:#039be5}
+.minus{background:#9e9e9e}
+
+.submit-btn{
+    margin-top:10px;width:100%;padding:10px;
+    border:none;border-radius:8px;background:var(--main);
+    color:#fff;font-size:16px;cursor:pointer
+}
+
+.hidden{display:none}
+
+/* 图片查看 */
+#viewer{position:fixed;inset:0;background:rgba(0,0,0,.8);
+    display:none;align-items:center;justify-content:center;z-index:99}
+#viewer img{max-width:90%;max-height:90%;border-radius:10px}
+</style>
+</head>
+
+<body>
+
+<header>
+🔫 改枪码工具
+<button onclick="toggleTheme()">🌙 / ☀️</button>
+</header>
+
+<div id="container"></div>
+
+<div class="add-box">
+    <h3>➕ 添加改枪码</h3>
+    <input id="weaponName" placeholder="枪械名称（如 AKM）">
+
+    <div id="codeLines"></div>
+
+    <button class="submit-btn" onclick="submitAll()">✓ 添加所有改枪码</button>
+</div>
+
+<div id="viewer" onclick="this.style.display='none'">
+    <img id="viewerImg">
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("gunData")) || [];
+let dragIndex=null;
+
+// 主题
+if(localStorage.getItem("theme")==="dark") document.body.classList.add("dark");
+function toggleTheme(){
+    document.body.classList.toggle("dark");
+    localStorage.setItem("theme",
+        document.body.classList.contains("dark")?"dark":"light");
+}
+
+// 初始化一行
+addLine();
+
+function save(){localStorage.setItem("gunData",JSON.stringify(data))}
+
+// ➕➖ 行
+function addLine(after){
+    const div=document.createElement("div");
+    div.className="code-line";
+    div.innerHTML=`
+        <input placeholder="填写改枪码">
+        <button class="plus">+</button>
+        <button class="minus">−</button>
+    `;
+    const plus=div.querySelector(".plus");
+    const minus=div.querySelector(".minus");
+
+    plus.onclick=()=>addLine(div);
+    minus.onclick=()=>{
+        if(document.querySelectorAll(".code-line").length>1)
+            div.remove();
+    };
+
+    if(after) after.after(div);
+    else codeLines.appendChild(div);
+}
+
+// 提交所有
+function submitAll(){
+    const weapon=weaponName.value.trim();
+    if(!weapon) return alert("请填写枪械名称");
+
+    let count=0;
+    document.querySelectorAll(".code-line input").forEach(i=>{
+        if(i.value.trim()){
+            data.push({weapon,code:i.value.trim()});
+            i.value="";
+            count++;
+        }
+    });
+    if(count===0) return alert("没有可添加的改枪码");
+    save(); render();
+}
+
+// 图片
+function uploadImage(i,input){
+    const f=input.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=e=>{data[i].img=e.target.result;save();render()};
+    r.readAsDataURL(f);
+}
+
+// 删除
+function removeCode(i){
+    if(!confirm("确定删除？"))return;
+    data.splice(i,1);save();render();
+}
+function viewImg(src){
+    viewerImg.src=src;viewer.style.display="flex";
+}
+
+// 渲染
+function render(){
+    container.innerHTML="";
+    const g={};
+    data.forEach((d,i)=>{
+        if(!g[d.weapon]) g[d.weapon]=[];
+        g[d.weapon].push({...d,index:i});
+    });
+
+    Object.keys(g).sort().forEach(w=>{
+        const box=document.createElement("div");
+        box.className="weapon-group";
+        box.innerHTML=`
+        <div class="weapon-header"
+        onclick="this.nextElementSibling.style.display=
+        this.nextElementSibling.style.display==='grid'?'none':'grid'">
+        ${w}</div><div class="weapon-list"></div>`;
+        const list=box.querySelector(".weapon-list");
+
+        g[w].forEach(d=>{
+            const c=document.createElement("div");
+            c.className="card";c.draggable=true;
+            c.innerHTML=`
+                ${d.img?`<img src="${d.img}" onclick="viewImg('${d.img}')">`:""}
+                <button onclick="this.nextElementSibling.click()">上传 / 更换照片</button>
+                <input class="hidden" type="file" accept="image/*"
+                    onchange="uploadImage(${d.index},this)">
+                <div class="code">${d.code}</div>
+                <button onclick="navigator.clipboard.writeText('${d.code}')">复制改枪码</button>
+                <button class="delete" onclick="removeCode(${d.index})">移除</button>
+            `;
+            c.addEventListener("dragstart",()=>dragIndex=d.index);
+            c.addEventListener("dragover",e=>e.preventDefault());
+            c.addEventListener("drop",()=>{
+                if(dragIndex===null||dragIndex===d.index)return;
+                const t=data[dragIndex];
+                data.splice(dragIndex,1);
+                data.splice(d.index,0,t);
+                save();render();
+            });
+            list.appendChild(c);
+        });
+        container.appendChild(box);
+    });
+}
+render();
+</script>
+
+</body>
+</html>
